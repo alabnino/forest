@@ -1,6 +1,9 @@
 // Copyright 2019-2023 ChainSafe Systems
 // SPDX-License-Identifier: Apache-2.0, MIT
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    time::{Duration, Instant},
+};
 
 use super::fvm_shared_latest::{self, commcid::Commitment};
 pub use super::fvm_shared_latest::{IPLD_RAW, TICKET_RANDOMNESS_LOOKBACK};
@@ -13,6 +16,7 @@ use fvm_ipld_encoding::{
 };
 use num::FromPrimitive;
 use num_derive::FromPrimitive;
+use tracing::warn;
 
 /// A cryptographic signature, represented in bytes, of any key protocol.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -157,7 +161,21 @@ pub fn verify_bls_sig(
     data: &[u8],
     addr: &crate::shim::address::Address,
 ) -> Result<(), String> {
-    fvm_shared_latest::crypto::signature::ops::verify_bls_sig(signature, data, &addr.into())
+    let start = Instant::now();
+    let result =
+        fvm_shared_latest::crypto::signature::ops::verify_bls_sig(signature, data, &addr.into());
+    let duration = Instant::now() - start;
+    const THRESHOLD: Duration = Duration::from_millis(500);
+    if duration > THRESHOLD {
+        warn!(
+            "Slow `verify_bls_sig` call({}ms): signature: {}, data: {}, addr: {addr}",
+            duration.as_millis(),
+            hex::encode(signature),
+            hex::encode(data)
+        );
+    }
+
+    result
 }
 
 /// Extracts the raw replica commitment from a CID

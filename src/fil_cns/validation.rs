@@ -1,6 +1,7 @@
 // Copyright 2019-2023 ChainSafe Systems
 // SPDX-License-Identifier: Apache-2.0, MIT
 
+use std::time::{Duration, Instant};
 use std::{collections::BTreeMap, sync::Arc};
 
 use crate::beacon::{BeaconEntry, BeaconSchedule, IGNORE_DRAND_VAR};
@@ -450,8 +451,23 @@ fn verify_winning_post(
     let prover_id = prover_id_from_u64(prover);
 
     // Verify Proof
+    let start = Instant::now();
     if !post::verify_winning_post(&bytes_32(&rand.0), &proof_bytes, &replicas, prover_id)? {
         anyhow::bail!("Winning post was invalid")
     }
+    let duration = Instant::now() - start;
+    const THRESHOLD: Duration = Duration::from_millis(500);
+    if duration > THRESHOLD {
+        tracing::warn!(
+            "Slow `verify_winning_post` call({}ms): randomness: {}, proof_bytes: {}, prover_id: {}, challenge_sectors: {}",
+            duration.as_millis(),
+            hex::encode(bytes_32(&rand.0)),
+            hex::encode(proof_bytes),
+            hex::encode(prover_id),hex::encode(
+                fvm_ipld_encoding::to_vec(&challenge_sectors.to_vec()).unwrap_or_default()
+            )
+        );
+    }
+
     Ok(())
 }
